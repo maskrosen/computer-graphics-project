@@ -265,15 +265,15 @@ void drawScene(void)
 
 void drawShadowMap(const float4x4 &viewMatrix, const float4x4 &projectionMatrix)
 {
-	//glBindFramebuffer(GL_FRAMEBUFFER, shadowMapFBO),
-		//glViewport(0, 0, shadowMapResolution, shadowMapResolution);
+	glBindFramebuffer(GL_FRAMEBUFFER, shadowMapFBO),
+	glViewport(0, 0, shadowMapResolution, shadowMapResolution);
 
 	glClearColor(1.0, 1.0, 1.0, 1.0);
 	glClearDepth(1.0);
 	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
 
-	//glEnable(GL_POLYGON_OFFSET_FILL);
-	//glPolygonOffset(2.5, 10);
+	glEnable(GL_POLYGON_OFFSET_FILL);
+	glPolygonOffset(2.5, 10);
 
 	// Get current shader, so we can restore it afterwards. Also, switch to
 	// the simple shader used to draw the shadow map.
@@ -300,7 +300,7 @@ void display(void)
 	float4x4 lightProjMatrix = perspectiveMatrix(45.0f, 1.0, 5.0f, 100.0f);
 	drawShadowMap(lightViewMatrix, lightProjMatrix);
 
-	//drawScene();
+	drawScene();
 	glutSwapBuffers();  // swap front and back buffer. This frame will now be displayed.
 	CHECK_GL_ERROR();
 }
