@@ -65,6 +65,9 @@ GLuint shadowMapTexture;
 GLuint shadowMapFBO;
 const int shadowMapResolution = 1024;
 
+float4x4 lightViewMatrix;
+float4x4 lightProjMatrix;
+
 
 // Helper function to turn spherical coordinates into cartesian (x,y,z)
 float3 sphericalToCartesian(float theta, float phi, float r)
@@ -162,7 +165,7 @@ void initGL()
 	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-	float4 zeros = { 0.0f, 0.0f, 0.0f, 0.0f };
+	float4 zeros = { 1.0f, 1.0f, 1.0f, 1.0f };
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
 	glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, &zeros.x);
@@ -186,12 +189,17 @@ void initGL()
 	// Cleanup: activate the default frame buffer again
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+
+	lightProjMatrix = perspectiveMatrix(22.0f, 1.0f, 0.1f, 1000.0f);
 }
 
 
 void drawModel(OBJModel *model, const float4x4 &modelMatrix)
-{	
-	setUniformSlow(shaderProgram, "modelMatrix", modelMatrix); 
+{
+	GLint currentProgram;
+	glGetIntegerv(GL_CURRENT_PROGRAM, &currentProgram);
+
+	setUniformSlow(currentProgram, "modelMatrix", modelMatrix);
 	model->render();
 }
 
@@ -201,10 +209,13 @@ void drawModel(OBJModel *model, const float4x4 &modelMatrix)
 */
 void drawShadowCasters()
 {
+	GLint currentProgram;
+	glGetIntegerv(GL_CURRENT_PROGRAM, &currentProgram);
+
 	drawModel(world, make_identity<float4x4>());
-	setUniformSlow(shaderProgram, "object_reflectiveness", 0.5f); 
-	drawModel(car, make_translation(make_vector(0.0f, 0.0f, 0.0f))); 
-	setUniformSlow(shaderProgram, "object_reflectiveness", 0.0f); 
+	setUniformSlow(currentProgram, "object_reflectiveness", 0.5f);
+	drawModel(car, make_translation(make_vector(0.0f, 0.0f, 0.0f)));
+	setUniformSlow(currentProgram, "object_reflectiveness", 0.0f);
 }
 
 
@@ -214,7 +225,6 @@ void drawScene(void)
 
 	// enable back face culling.
 	glEnable(GL_CULL_FACE);	
-
 
 	//*************************************************************************
 	// Render the scene from the cameras viewpoint, to the default framebuffer
@@ -236,11 +246,16 @@ void drawScene(void)
 	setUniformSlow(shaderProgram, "projectionMatrix", projectionMatrix);
 	setUniformSlow(shaderProgram, "lightpos", lightPosition); 
 
+	float4x4 lightMatrix = lightProjMatrix * lightViewMatrix * inverse(viewMatrix);
+
+	setUniformSlow(shaderProgram, "lightMatrix", lightMatrix);
+
+
 	drawModel(water, make_translation(make_vector(0.0f, -6.0f, 0.0f)));
 
 	glActiveTexture(GL_TEXTURE1);
 	glBindTexture(GL_TEXTURE_2D, shadowMapTexture);
-	setUniformSlow(shaderProgram, "shadowMapTex", 1);
+	setUniformSlow(shaderProgram, "shadowMap", 1);
 
 	float3 viewSpaceLightDir = transformDirection(
 		viewMatrix, -normalize(lightPosition));
@@ -263,7 +278,7 @@ void drawScene(void)
 	glUseProgram( 0 );	
 }
 
-void drawShadowMap(const float4x4 &viewMatrix, const float4x4 &projectionMatrix)
+void drawShadowMap()
 {
 	glBindFramebuffer(GL_FRAMEBUFFER, shadowMapFBO),
 	glViewport(0, 0, shadowMapResolution, shadowMapResolution);
@@ -273,15 +288,16 @@ void drawShadowMap(const float4x4 &viewMatrix, const float4x4 &projectionMatrix)
 	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
 
 	glEnable(GL_POLYGON_OFFSET_FILL);
-	glPolygonOffset(2.5, 10);
+	glPolygonOffset(1.0, 2);
 
 	// Get current shader, so we can restore it afterwards. Also, switch to
 	// the simple shader used to draw the shadow map.
 	GLint currentProgram;
 	glGetIntegerv(GL_CURRENT_PROGRAM, &currentProgram);
-	glUseProgram(shaderProgram);
+	glUseProgram(basicShaderProgram);
 
-
+	setUniformSlow(basicShaderProgram, "projectionMatrix", lightProjMatrix);
+	setUniformSlow(basicShaderProgram, "viewMatrix", lightViewMatrix);
 	// draw shadow casters
 	drawShadowCasters();
 
@@ -296,9 +312,7 @@ void drawShadowMap(const float4x4 &viewMatrix, const float4x4 &projectionMatrix)
 void display(void)
 {	
 	// construct light matrices
-	float4x4 lightViewMatrix = lookAt(lightPosition, make_vector(0.0f, 0.0f, 0.0f), up);
-	float4x4 lightProjMatrix = perspectiveMatrix(45.0f, 1.0, 5.0f, 100.0f);
-	drawShadowMap(lightViewMatrix, lightProjMatrix);
+	drawShadowMap();
 
 	drawScene();
 	glutSwapBuffers();  // swap front and back buffer. This frame will now be displayed.
@@ -409,6 +423,8 @@ void idle( void )
 	float4x4 rotateLight = make_rotation_x<float4x4>(2.0f * M_PI * currentTime / 20.0f);
 	// rotate and update global light position.
 	lightPosition = make_vector3(rotateLight * make_vector(30.1f, 450.0f, 0.1f, 1.0f));
+
+	lightViewMatrix = lookAt(lightPosition, make_vector(0.0f, 0.0f, 0.0f), make_vector(0.0f, 1.0f, 0.0f));
 
 	glutPostRedisplay();  
 	// Uncommenting the line above tells glut that the window 

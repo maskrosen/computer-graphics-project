@@ -8,7 +8,7 @@ in vec2 texCoord;
 in vec3 viewSpacePosition; 
 in vec3 viewSpaceNormal; 
 in vec3 viewSpaceLightPosition; 
-in vec4 shadowTexCoord;
+in vec4 shadowMapCoord;
 
 // output to frame buffer.
 out vec4 fragmentColor;
@@ -92,12 +92,13 @@ void main()
 		emissive *= texture(diffuse_texture, texCoord.xy).xyz; 
 	}
 
-	fragmentColor = vec4( calculateAmbient(scene_ambient_light, ambient) +  
-		calculateDiffuse(scene_light, diffuse, normal, directionToLight) +
-		calculateSpecular(scene_light, specular, material_shininess, 
-		normal, directionToLight, directionFromEye) +
-		emissive, object_alpha);
+	float visibility = textureProj(shadowMap, shadowMapCoord);
 
+fragmentColor = vec4( calculateAmbient(scene_ambient_light, ambient) +  
+		calculateDiffuse(scene_light, diffuse, normal, directionToLight) * visibility +
+		calculateSpecular(scene_light, specular, material_shininess, 
+		normal, directionToLight, directionFromEye) * visibility +
+		emissive, object_alpha);
 	
 
 }

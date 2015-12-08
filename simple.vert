@@ -9,10 +9,12 @@ out vec3	viewSpaceNormal;
 out vec3	viewSpaceLightPosition; 
 out vec4	color;
 out	vec2	texCoord;	// outgoing interpolated texcoord to fragshader
+out	vec4	shadowMapCoord;
 uniform mat4 modelMatrix; 
 uniform mat4 viewMatrix; 
 uniform mat4 projectionMatrix; 
 uniform vec3 lightpos; 
+uniform mat4 lightMatrix; 
 
 
 void main() 
@@ -33,4 +35,8 @@ void main()
 	viewSpaceLightPosition = (modelViewMatrix * vec4(lightpos, 1)).xyz; 
 	vec4 worldSpacePosition = modelMatrix * vec4(position, 1); 
 	gl_Position = modelViewProjectionMatrix * vec4(position,1);
+
+	shadowMapCoord = lightMatrix * vec4(viewSpacePosition, 1.0);
+	shadowMapCoord.xyz *= vec3(0.5,0.5,0.5);
+	shadowMapCoord.xyz += shadowMapCoord.w * vec3(0.5,0.5,0.5);
 }
