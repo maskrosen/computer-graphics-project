@@ -63,6 +63,7 @@ int prev_y = 0;
 GLuint basicShaderProgram;
 GLuint shadowMapTexture;
 GLuint shadowMapFBO;
+GLuint cubeMapTexture;
 const int shadowMapResolution = 1024;
 
 float4x4 lightViewMatrix;
@@ -191,6 +192,17 @@ void initGL()
 
 
 	lightProjMatrix = perspectiveMatrix(22.0f, 1.0f, 0.1f, 1000.0f);
+
+	cubeMapTexture = loadCubeMap("cube0.png", "cube1.png",
+		"cube2.png", "cube3.png",
+		"cube4.png", "cube5.png");
+
+
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, cubeMapTexture);
+	glUseProgram(shaderProgram);
+	setUniformSlow(shaderProgram, "environmentMap", 2);
+
 }
 
 
@@ -243,6 +255,8 @@ void drawScene(void)
 	float4x4 viewMatrix = lookAt(camera_position, camera_lookAt, camera_up);
 	float4x4 projectionMatrix = perspectiveMatrix(45.0f, float(w) / float(h), 0.1f, 1000.0f);
 	setUniformSlow(shaderProgram, "viewMatrix", viewMatrix);
+	setUniformSlow(shaderProgram, "inverseViewNormalMatrix",
+		transpose(viewMatrix));
 	setUniformSlow(shaderProgram, "projectionMatrix", projectionMatrix);
 	setUniformSlow(shaderProgram, "lightpos", lightPosition); 
 

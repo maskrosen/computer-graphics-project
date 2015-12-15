@@ -32,6 +32,9 @@ uniform vec3 material_emissive_color;
 uniform int has_diffuse_texture; 
 uniform sampler2D diffuse_texture;
 
+uniform samplerCube environmentMap;
+uniform mat4 inverseViewNormalMatrix;
+
 
 vec3 calculateAmbient(vec3 ambientLight, vec3 materialAmbient)
 {
@@ -84,6 +87,13 @@ void main()
 	vec3 normal = normalize(viewSpaceNormal);
 	vec3 directionFromEye = normalize(viewSpacePosition);
 
+
+	vec3 reflectionVector = (inverseViewNormalMatrix *
+		vec4(reflect(directionFromEye, normal), 0.0)).xyz;
+	vec3 envMapSample = texture(environmentMap, reflectionVector).rgb;
+	vec3 fresnelSpecular = calculateFresnel(specular, normal,
+		directionFromEye);
+
 	// if we have a texture we modulate all of the color properties
 	if (has_diffuse_texture == 1)
 	{
@@ -98,7 +108,8 @@ fragmentColor = vec4( calculateAmbient(scene_ambient_light, ambient) +
 		calculateDiffuse(scene_light, diffuse, normal, directionToLight) * visibility +
 		calculateSpecular(scene_light, specular, material_shininess, 
 		normal, directionToLight, directionFromEye) * visibility +
-		emissive, object_alpha);
+		emissive +
+		envMapSample * fresnelSpecular, object_alpha);
 	
 
 }
