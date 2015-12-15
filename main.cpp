@@ -70,6 +70,14 @@ float4x4 lightViewMatrix;
 float4x4 lightProjMatrix;
 
 
+GLuint cubeMapFBO0;
+GLuint cubeMapFBO1;
+GLuint cubeMapFBO2;
+GLuint cubeMapFBO3;
+GLuint cubeMapFBO4;
+GLuint cubeMapFBO5;
+
+
 // Helper function to turn spherical coordinates into cartesian (x,y,z)
 float3 sphericalToCartesian(float theta, float phi, float r)
 {
@@ -150,6 +158,50 @@ void initGL()
 	car->load("../scenes/car.obj");
 
 
+	//Cube map
+	glGenTextures(1, &cubeMapTexture);
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, cubeMapTexture);
+
+	const int size = 128;
+	// create the fbo
+	glGenFramebuffers(1, &cubeMapFBO0);
+	glBindFramebuffer(GL_FRAMEBUFFER, cubeMapFBO0);
+
+	for (int i = 0; i < 6; i++)
+	{
+		glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB,
+			size, size, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
+
+	}
+	glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER,
+		GL_LINEAR);
+	glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER,
+		GL_LINEAR);
+	glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S,
+		GL_CLAMP_TO_EDGE);
+	glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T,
+		GL_CLAMP_TO_EDGE);
+	glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R,
+		GL_CLAMP_TO_EDGE);
+	
+	// create the uniform depth buffer
+	glGenRenderbuffers(1, &cubeMapFBO1);
+	glBindRenderbuffer(GL_RENDERBUFFER, cubeMapFBO1);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, size, size);
+	//glBindRenderbuffer(GL_RENDERBUFFER, 0);
+	GLenum drawBufs[] = { GL_COLOR_ATTACHMENT0 };
+	// attach it
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, cubeMapFBO0);
+	//glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X, cubemap, 0);
+	glDrawBuffers(1, drawBufs);
+
+	////////
+
+	// Cleanup: activate the default frame buffer again
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+
 	// Generate and bind our shadow map texture
 	glGenTextures(1, &shadowMapTexture);
 	glBindTexture(GL_TEXTURE_2D, shadowMapTexture);
@@ -183,23 +235,20 @@ void initGL()
 	// Bind the depth texture we just created to the FBO’s depth attachment
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
 		GL_TEXTURE_2D, shadowMapTexture, 0);
+
 	// We’re rendering depth only, so make sure we’re not trying to access
 	// the color buffer by setting glDrawBuffer() and glReadBuffer() to GL_NONE
 	glDrawBuffer(GL_NONE);
 	glReadBuffer(GL_NONE);
-	// Cleanup: activate the default frame buffer again
+
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-
 	lightProjMatrix = perspectiveMatrix(22.0f, 1.0f, 0.1f, 1000.0f);
-
+	/*
 	cubeMapTexture = loadCubeMap("cube0.png", "cube1.png",
 		"cube2.png", "cube3.png",
 		"cube4.png", "cube5.png");
-
-
-	glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_CUBE_MAP, cubeMapTexture);
+		*/
 	glUseProgram(shaderProgram);
 	setUniformSlow(shaderProgram, "environmentMap", 2);
 
@@ -229,7 +278,6 @@ void drawShadowCasters()
 	drawModel(car, make_translation(make_vector(0.0f, 0.0f, 0.0f)));
 	setUniformSlow(currentProgram, "object_reflectiveness", 0.0f);
 }
-
 
 void drawScene(void)
 {
@@ -270,6 +318,10 @@ void drawScene(void)
 	glActiveTexture(GL_TEXTURE1);
 	glBindTexture(GL_TEXTURE_2D, shadowMapTexture);
 	setUniformSlow(shaderProgram, "shadowMap", 1);
+
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, cubeMapTexture);
+	setUniformSlow(shaderProgram, "environmentMap", 2);
 
 	float3 viewSpaceLightDir = transformDirection(
 		viewMatrix, -normalize(lightPosition));
@@ -323,10 +375,119 @@ void drawShadowMap()
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+
+void drawCubeMap()
+{
+	
+	glBindFramebuffer(GL_FRAMEBUFFER, cubeMapFBO0);
+	glEnable(GL_DEPTH_TEST);// enable Z-buffering
+	glEnable(GL_CULL_FACE);// enable back face culling.
+	//glViewport(0, 0, 128, 128);
+	
+	glClearColor(1.0, 1.0, 1.0, 1.0);
+	glClearDepth(1.0);
+	
+	
+	for (int i = 0; i<6; i++)
+	{
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+			GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, cubeMapTexture, 0);
+
+		float cameraYOffset = 1.0f;
+		float3 camera_position = make_vector(0.0f, cameraYOffset, 0.0f);
+		float3 camera_lookAt, camera_up;
+		float4x4 viewMatrix;
+		if (i == 0) { //X+
+			//cam->Update(vec3(0), vec3(10, 0, 0)); // position, target
+
+			camera_up = make_vector(0.0f, 1.0f, 0.0f);
+			camera_lookAt = make_vector(1.0f, cameraYOffset, 0.0f);
+			viewMatrix = lookAt(camera_position, camera_lookAt, camera_up);
+		}
+		else if (i == 1) { //X-
+			//cam->Update(vec3(0), vec3(-10, 0, 0));
+			camera_up = make_vector(0.0f, 1.0f, 0.0f);
+			camera_lookAt = make_vector(-1.0f, cameraYOffset, 0.0f);
+			viewMatrix = lookAt(camera_position, camera_lookAt, camera_up);
+		}
+		else if (i == 2) {//Y+
+			//cam->Update(vec3(0), vec3(0, 10, 0));
+			camera_up = make_vector(0.0f, 0.0f, 1.0f);
+			camera_lookAt = make_vector(0.0f, 1.0f + cameraYOffset, 0.0f);
+			viewMatrix = lookAt(camera_position, camera_lookAt, camera_up);
+		}
+		else if (i == 3) {//....
+			//cam->Update(vec3(0), vec3(0, -10, 0));
+			camera_up = make_vector(0.0f, 0.0f, 1.0f);
+			camera_lookAt = make_vector(0.0f, -1.0f + cameraYOffset, 0.0f);
+			viewMatrix = lookAt(camera_position, camera_lookAt, camera_up);
+		}
+		else if (i == 4) {
+			//cam->Update(vec3(0), vec3(0, 0, 10));
+			camera_up = make_vector(0.0f, 1.0f, 0.0f);
+			camera_lookAt = make_vector(0.0f, cameraYOffset, 1.0f);
+			viewMatrix = lookAt(camera_position, camera_lookAt, camera_up);
+		}
+		else if (i == 5) {
+			//cam->Update(vec3(0), vec3(0, 0, -10));
+			camera_up = make_vector(0.0f, 1.0f, 0.0f);
+			camera_lookAt = make_vector(0.0f, cameraYOffset, -1.0f);
+			viewMatrix = lookAt(camera_position, camera_lookAt, camera_up);
+		}
+		
+		glUseProgram(shaderProgram);
+		float4x4 projectionMatrix = perspectiveMatrix(90.0f, 1.0f, 0.1f, 1000.0f);
+		setUniformSlow(shaderProgram, "viewMatrix", viewMatrix);
+		setUniformSlow(shaderProgram, "inverseViewNormalMatrix",
+			transpose(viewMatrix));
+		setUniformSlow(shaderProgram, "projectionMatrix", projectionMatrix);
+		setUniformSlow(shaderProgram, "lightpos", lightPosition);
+
+		float4x4 lightMatrix = lightProjMatrix * lightViewMatrix * inverse(viewMatrix);
+
+		setUniformSlow(shaderProgram, "lightMatrix", lightMatrix);
+
+		drawModel(water, make_translation(make_vector(0.0f, -6.0f, 0.0f)));
+
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, shadowMapTexture);
+		setUniformSlow(shaderProgram, "shadowMap", 1);
+
+		float3 viewSpaceLightDir = transformDirection(
+			viewMatrix, -normalize(lightPosition));
+		setUniformSlow(shaderProgram, "viewSpaceLightDir", viewSpaceLightDir);
+
+		drawModel(world, make_identity<float4x4>());
+
+		glDepthMask(GL_FALSE);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		drawModel(skyboxnight, make_identity<float4x4>());
+		setUniformSlow(shaderProgram, "object_alpha", max<float>(0.0f, cosf((currentTime / 20.0f) * 2.0f * M_PI)));
+		drawModel(skybox, make_identity<float4x4>());
+		setUniformSlow(shaderProgram, "object_alpha", 1.0f);
+		glDisable(GL_BLEND);
+		glDepthMask(GL_TRUE);
+
+		glUseProgram(0);
+
+	}
+	
+
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+
+
 void display(void)
 {	
 	// construct light matrices
 	drawShadowMap();
+	
+	drawCubeMap();
 
 	drawScene();
 	glutSwapBuffers();  // swap front and back buffer. This frame will now be displayed.

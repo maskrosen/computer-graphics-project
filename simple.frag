@@ -109,7 +109,7 @@ fragmentColor = vec4( calculateAmbient(scene_ambient_light, ambient) +
 		calculateSpecular(scene_light, specular, material_shininess, 
 		normal, directionToLight, directionFromEye) * visibility +
 		emissive +
-		envMapSample * fresnelSpecular * object_reflectiveness, object_alpha);
+		envMapSample * object_reflectiveness, object_alpha);
 	
 
 }
